@@ -1,0 +1,95 @@
+# dashboard_heatmap_agent.py — Strategy Evolution Heatmap (Ultra Elite)
+
+import os
+import json
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+from datetime import datetime
+
+PERFORMANCE_LOG = "logs/strategy_feedback.json"
+FORECAST_TRACKER = "logs/prices/forecast_price_tracker.json"
+ACCURACY_LOG = "data/forecast_accuracy.json"
+HEATMAP_IMAGE_DIR = "logs/heatmaps"
+
+class DashboardHeatmapAgent:
+    def __init__(self):
+        self.strategy_df = pd.DataFrame()
+        self.forecast_df = pd.DataFrame()
+        self.model_df = pd.DataFrame()
+        os.makedirs(HEATMAP_IMAGE_DIR, exist_ok=True)
+
+    def load_json(self, path):
+        if not os.path.exists(path):
+            return {}
+        with open(path, "r") as f:
+            return json.load(f)
+
+    def process_strategy_performance(self):
+        data = self.load_json(PERFORMANCE_LOG)
+        rows = []
+        for token, strat_data in data.items():
+            for strat, metrics in strat_data.items():
+                rows.append({
+                    "token": token,
+                    "strategy": strat,
+                    "sharpe": metrics.get("sharpe"),
+                    "drawdown": metrics.get("drawdown"),
+                    "hit_rate": metrics.get("hit_rate")
+                })
+        self.strategy_df = pd.DataFrame(rows)
+
+    def process_forecast_tracker(self):
+        data = self.load_json(FORECAST_TRACKER)
+        rows = []
+        for token, history in data.items():
+            for entry in history:
+                rows.append({
+                    "token": token,
+                    "label": entry.get("forecast_label"),
+                    "model": entry.get("model"),
+                    "price": entry.get("price"),
+                    "timestamp": entry.get("timestamp")
+                })
+        self.forecast_df = pd.DataFrame(rows)
+
+    def process_model_accuracy(self):
+        data = self.load_json(ACCURACY_LOG)
+        rows = []
+        for k, v in data.items():
+            rows.append({
+                "model": k.split("_")[0],
+                "correct": v.get("correct", 0),
+                "total": v.get("total", 1),
+                "accuracy": round(v.get("correct", 0) / max(1, v.get("total", 1)), 4)
+            })
+        self.model_df = pd.DataFrame(rows)
+
+    def render_heatmaps(self):
+        st.title("📊 Strategy Evolution Dashboard")
+
+        if not self.strategy_df.empty:
+            fig1 = px.density_heatmap(self.strategy_df, x="strategy", y="token", z="sharpe",
+                                      color_continuous_scale="Viridis", title="Sharpe Ratio Heatmap")
+            st.plotly_chart(fig1)
+            fig1.write_image(f"{HEATMAP_IMAGE_DIR}/sharpe_heatmap.png")
+
+            fig2 = px.density_heatmap(self.strategy_df, x="strategy", y="token", z="drawdown",
+                                      color_continuous_scale="Reds", title="Drawdown Heatmap")
+            st.plotly_chart(fig2)
+            fig2.write_image(f"{HEATMAP_IMAGE_DIR}/drawdown_heatmap.png")
+
+        if not self.model_df.empty:
+            fig3 = px.bar(self.model_df, x="model", y="accuracy", color="model", title="Model Accuracy Tracker")
+            st.plotly_chart(fig3)
+            fig3.write_image(f"{HEATMAP_IMAGE_DIR}/model_accuracy_bar.png")
+
+    def run(self):
+        self.process_strategy_performance()
+        self.process_forecast_tracker()
+        self.process_model_accuracy()
+        self.render_heatmaps()
+
+if __name__ == "__main__":
+    agent = DashboardHeatmapAgent()
+    agent.run()

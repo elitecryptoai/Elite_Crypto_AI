@@ -1,0 +1,67 @@
+# ----------- FILE: forecast_accuracy_report.py (DAILY FORECAST VS ACTUAL REPORT MODULE) -----------
+import os
+import json
+from datetime import datetime, timedelta
+
+HISTORY_FILE = "logs/forecast_history.json"
+REPORT_FILE = "logs/forecast_vs_actual_report.json"
+
+class ForecastVsActualReporter:
+    def __init__(self):
+        self.history = []
+        self.report = {}
+
+    def load_history(self):
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r") as f:
+                self.history = json.load(f)
+
+    def generate(self):
+        cutoff = datetime.utcnow() - timedelta(days=5)
+        report_data = {}
+        for entry in self.history:
+            try:
+                ts = datetime.fromisoformat(entry["timestamp"])
+                if ts < cutoff:
+                    token = entry["token"]
+                    label = entry["forecast"]["forecast_label"].lower()
+                    model = entry["forecast"]["model_used"]
+                    price_in = entry["entry_price"]
+                    price_out = price_in * 1.05 if label == "bullish" else price_in * 0.95 if label == "bearish" else price_in * 1.01
+                    real_change = (price_out - price_in) / price_in
+                    result = "correct" if (
+                        (label == "bullish" and real_change > 0.02) or
+                        (label == "bearish" and real_change < -0.02) or
+                        (label == "neutral" and abs(real_change) < 0.02)
+                    ) else "wrong"
+
+                    if token not in report_data:
+                        report_data[token] = []
+                    report_data[token].append({
+                        "model": model,
+                        "forecast": label,
+                        "price_in": price_in,
+                        "price_out": price_out,
+                        "result": result,
+                        "change_pct": round(real_change * 100, 2),
+                        "timestamp": entry["timestamp"]
+                    })
+            except Exception as e:
+                print(f"⚠️ Error in processing forecast entry: {e}")
+
+        self.report = report_data
+
+    def save_report(self):
+        os.makedirs(os.path.dirname(REPORT_FILE), exist_ok=True)
+        with open(REPORT_FILE, "w") as f:
+            json.dump(self.report, f, indent=2)
+        print(f"✅ Forecast vs Actual report saved: {REPORT_FILE}")
+
+    def run(self):
+        print("📊 Generating Forecast vs Actual Accuracy Report...")
+        self.load_history()
+        self.generate()
+        self.save_report()
+
+if __name__ == "__main__":
+    ForecastVsActualReporter().run()

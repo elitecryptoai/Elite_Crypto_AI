@@ -1,0 +1,15 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 10221.61,
+  "return_pct": 2.22,
+  "total_trades": 1,
+  "strategy_file": "ai_strategy_20250706_220805.py",
+  "timestamp": "2025-07-06T22:14:02.488726",
+  "trades": [
+    {
+      "date": "2024-04-01 00:00:00",
+      "action": "BUY",
+      "price": 1805
+    }
+  ]
+}
